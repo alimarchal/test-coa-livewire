@@ -1,0 +1,197 @@
+import { Head } from '@inertiajs/react';
+import { Download } from 'lucide-react';
+import { Fragment } from 'react';
+import FilterBar, { filterQuery } from '@/components/accounting/filter-bar';
+import { Button } from '@/components/ui/button';
+import type { BreadcrumbItem } from '@/types';
+import { useAccountingI18n } from '@/lib/i18n';
+
+type StatementRow = {
+    account_code: string;
+    account_name: string;
+    account_type: string;
+    normal_balance: string;
+    total_debits: number | string;
+    total_credits: number | string;
+    balance: number | string;
+};
+
+function money(value: number | string | null | undefined): string {
+    return Number(value ?? 0).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+}
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Accounting', href: '/accounting' },
+    { title: 'Balance Sheet', href: '/accounting/reports/balance-sheet' },
+];
+
+type Totals = {
+    assets: number;
+    liabilities_and_equity: number;
+    difference: number;
+};
+
+export default function BalanceSheet({
+    rows,
+    totals,
+    filters,
+}: {
+    rows: StatementRow[];
+    totals: Totals;
+    filters: Record<string, string | null>;
+}) {
+    useAccountingI18n();
+    const grouped = rows.reduce<Record<string, StatementRow[]>>(
+        (carry, row) => {
+            carry[row.account_type] = [...(carry[row.account_type] ?? []), row];
+
+            return carry;
+        },
+        {},
+    );
+
+    return (
+        <>
+            <Head title="Balance Sheet" />
+            <div className="flex h-full flex-1 flex-col gap-4 p-4">
+                <FilterBar
+                    path="/accounting/reports/balance-sheet"
+                    values={filters}
+                    fields={[
+                        { name: 'as_of_date', label: 'As of', type: 'date' },
+                    ]}
+                />
+
+                <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                    <div>
+                        <h1 className="text-2xl font-semibold">
+                            Balance Sheet
+                        </h1>
+                        <p className="text-sm text-muted-foreground">
+                            Assets, liabilities, and equity account balances.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {['csv', 'xlsx', 'pdf'].map((format) => (
+                            <Button key={format} asChild variant="outline">
+                                <a
+                                    href={`/accounting/reports/balance-sheet/export/${format}${filterQuery(filters)}`}
+                                >
+                                    <Download className="size-4" />
+                                    {format.toUpperCase()}
+                                </a>
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                    <div className="rounded-lg border p-4">
+                        <div className="text-sm text-muted-foreground">
+                            Total assets
+                        </div>
+                        <div className="mt-1 text-2xl font-semibold tabular-nums">
+                            {money(totals.assets)}
+                        </div>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                        <div className="text-sm text-muted-foreground">
+                            Liabilities + equity
+                        </div>
+                        <div className="mt-1 text-2xl font-semibold tabular-nums">
+                            {money(totals.liabilities_and_equity)}
+                        </div>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                        <div className="text-sm text-muted-foreground">
+                            Difference
+                        </div>
+                        <div
+                            className={`mt-1 text-2xl font-semibold tabular-nums ${Math.abs(totals.difference) < 0.005 ? '' : 'text-red-600'}`}
+                        >
+                            {money(totals.difference)}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="overflow-hidden rounded-lg border">
+                    <table className="w-full min-w-[820px] text-sm">
+                        <thead className="bg-muted/50 text-left">
+                            <tr>
+                                <th className="p-3 font-medium">Code</th>
+                                <th className="p-3 font-medium">Account</th>
+                                <th className="p-3 text-right font-medium">
+                                    Debit
+                                </th>
+                                <th className="p-3 text-right font-medium">
+                                    Credit
+                                </th>
+                                <th className="p-3 text-right font-medium">
+                                    Balance
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Object.entries(grouped).map(
+                                ([group, groupRows]) => (
+                                    <Fragment key={group}>
+                                        <tr
+                                            key={`${group}-header`}
+                                            className="border-t bg-muted/20"
+                                        >
+                                            <td
+                                                className="p-3 font-semibold"
+                                                colSpan={5}
+                                            >
+                                                {group}
+                                            </td>
+                                        </tr>
+                                        {groupRows.map((row) => (
+                                            <tr
+                                                key={row.account_code}
+                                                className="border-t"
+                                            >
+                                                <td className="p-3 font-medium">
+                                                    {row.account_code}
+                                                </td>
+                                                <td className="p-3">
+                                                    {row.account_name}
+                                                </td>
+                                                <td className="p-3 text-right tabular-nums">
+                                                    {money(row.total_debits)}
+                                                </td>
+                                                <td className="p-3 text-right tabular-nums">
+                                                    {money(row.total_credits)}
+                                                </td>
+                                                <td className="p-3 text-right tabular-nums">
+                                                    {money(row.balance)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </Fragment>
+                                ),
+                            )}
+                            {!rows.length ? (
+                                <tr>
+                                    <td
+                                        className="p-6 text-center text-muted-foreground"
+                                        colSpan={5}
+                                    >
+                                        No balance sheet rows found.
+                                    </td>
+                                </tr>
+                            ) : null}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </>
+    );
+}
+
+BalanceSheet.layout = {
+    breadcrumbs,
+};
